@@ -1,0 +1,56 @@
+{
+    // ------------------------------
+    // 🧠  Testing Configuration
+    // ------------------------------
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": [
+        "tests",
+        "--no-cov"
+    ],
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    // ------------------------------
+    // 🐍  Python Interpreter Settings
+    // ------------------------------
+    // Use the local virtual environment
+    "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
+    // Optional: explicitly tell the terminal to use the same environment
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "${workspaceFolder}"
+    },
+    // ------------------------------
+    // ⚙️  Environment Variables
+    // ------------------------------
+    "python.envFile": "${workspaceFolder}/.env",
+    // ------------------------------
+    // 🧩  IntelliSense & Code Analysis
+    // ------------------------------
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/app",
+        "${workspaceFolder}/tests"
+    ],
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.useLibraryCodeForTypes": true,
+    // ------------------------------
+    // 🧹  Linting & Formatting
+    // ------------------------------
+    "python.formatting.provider": "black",
+    "editor.formatOnSave": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.flake8Enabled": false,
+    // ------------------------------
+    // 🪵  Logging
+    // ------------------------------
+    "python.logging.level": "DEBUG",
+    // ------------------------------
+    // 🧰  Miscellaneous
+    // ------------------------------
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true
+    },
+    "python.envs.pythonProjects": []
+}
