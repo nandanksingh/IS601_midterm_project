@@ -1,4 +1,18 @@
+# ----------------------------------------------------------
+# Author: Nandan Kumar
+# Date: 10/17/2025
+# Midterm Project: Enhanced Calculator Command-Line Application
+# ----------------------------------------------------------
+# Description:
+# This file lists all dependencies required to run and test
+# the calculator project. It includes libraries for:
+#   - Core arithmetic and data management (pandas, numpy)
+#   - Logging and environment configuration (python-dotenv)
+#   - Testing, coverage, and linting (pytest, pylint, coverage)
+# ----------------------------------------------------------
+
 astroid==3.3.5
+colorama==0.4.6
 coverage==7.6.4
 dill==0.3.9
 exceptiongroup==1.2.2
@@ -22,4 +36,3 @@ tomli==2.0.2
 tomlkit==0.13.2
 tzdata==2024.2
 typing_extensions==4.12.2
-

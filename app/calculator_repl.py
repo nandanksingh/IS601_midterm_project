@@ -1,144 +1,202 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 10/06/2025
-# Assignment 5 - Enhanced Calculator (REPL)
+# Date: 10/16/2025
+# Midterm Project: Enhanced Calculator (REPL Interface)
+# ----------------------------------------------------------
+# Description:
+# Implements the command-line REPL for the calculator.
+# Supports operations via Factory + Strategy patterns, along with
+# history management (undo/redo/save/load) and graceful error handling.
+# Color-coded outputs.
 # ----------------------------------------------------------
 
 import sys
-from app.operations import OperationFactory
+from colorama import Fore, Style, init
 from app.exceptions import OperationError, ValidationError
 
-# Import inside function for safety to avoid recursive mock crash
+# Initialize colorama for colored console output
+init(autoreset=True)
+
+
+# ----------------------------------------------------------
+# Helper functions for colored messages
+# ----------------------------------------------------------
+def success(msg):
+    print(Fore.GREEN + msg + Style.RESET_ALL)
+
+def info(msg):
+    print(Fore.CYAN + msg + Style.RESET_ALL)
+
+def warn(msg):
+    print(Fore.YELLOW + msg + Style.RESET_ALL)
+
+def error(msg):
+    print(Fore.RED + msg + Style.RESET_ALL)
+
+
 def safe_import_calculator():
-    """Safely import Calculator even if module patched during tests."""
+    """
+    Safely import Calculator inside function.
+    This avoids recursive mock failures during pytest.
+    """
     from app.calculator import Calculator
     return Calculator
 
 
+# ----------------------------------------------------------
+# Command Execution
+# ----------------------------------------------------------
 def _perform_command(calc, command, input_func=input):
     """Execute a single command using the calculator instance."""
     try:
-        # Arithmetic commands
-        if command in ("add", "subtract", "multiply", "divide", "power", "root"):
-            print("\nEnter numbers (or 'cancel' to abort):")
-            num1 = input_func("First number: ").strip()
+        # ------------------------------------------------------
+        # Arithmetic Commands (10 total)
+        # ------------------------------------------------------
+        if command in (
+            "add", "subtract", "multiply", "divide",
+            "power", "root", "modulus", "int_divide",
+            "percent", "abs_diff"
+        ):
+            info("\nEnter numbers (or 'cancel' to abort):")
+
+            num1 = input_func(Fore.YELLOW + "First number: " + Style.RESET_ALL).strip()
             if num1.lower() == "cancel":
-                print("Operation cancelled.")
+                warn("Operation cancelled.")
                 return True
 
-            num2 = input_func("Second number: ").strip()
+            num2 = input_func(Fore.YELLOW + "Second number: " + Style.RESET_ALL).strip()
             if num2.lower() == "cancel":
-                print("Operation cancelled.")
+                warn("Operation cancelled.")
                 return True
 
-            calc.set_operation(OperationFactory.create_operation(command))
+            calc.set_operation(command)
             result = calc.perform_operation(num1, num2)
-            print(f"Result: {result}")
+            success(f"Result: {result}")
             return True
 
-        # History / Maintenance
+        # ------------------------------------------------------
+        # History & Maintenance Commands
+        # ------------------------------------------------------
         elif command == "history":
             hist = calc.show_history()
             if not hist:
-                print("No calculations yet.")
+                warn("No calculations yet.")
             else:
-                print("\nCalculation History:")
+                info("\nCalculation History:")
                 for entry in hist:
-                    print(f"  {entry}")
+                    print(Fore.WHITE + f"  {entry}" + Style.RESET_ALL)
             return True
 
         elif command == "clear":
             calc.clear_history()
-            print("History cleared.")
+            warn("History cleared.")
             return True
 
         elif command == "undo":
-            print("Operation undone." if calc.undo() else "Nothing to undo.")
+            msg = "Operation undone." if calc.undo() else "Nothing to undo."
+            info(msg)
             return True
 
         elif command == "redo":
-            print("Operation redone." if calc.redo() else "Nothing to redo.")
+            msg = "Operation redone." if calc.redo() else "Nothing to redo."
+            info(msg)
             return True
 
-        # Persistence
+        # ------------------------------------------------------
+        # Persistence Commands
+        # ------------------------------------------------------
         elif command == "save":
             try:
                 calc.save_history()
-                print("History saved successfully.")
+                success("History saved successfully.")
             except Exception as e:
-                print(f"Error saving history: {e}")
+                error(f"Error saving history: {e}")
             return True
 
         elif command == "load":
             try:
                 calc.load_history()
-                print("History loaded successfully.")
+                success("History loaded successfully.")
             except Exception as e:
-                print(f"Error loading history: {e}")
+                error(f"Error loading history: {e}")
             return True
 
-        # Help / Exit
+        # ------------------------------------------------------
+        # Help & Exit
+        # ------------------------------------------------------
         elif command == "help":
-            print("""
+            info("""
 Available commands:
-  add, subtract, multiply, divide, power, root - Perform calculations
-  history - Show calculation history
-  clear - Clear calculation history
-  undo - Undo the last calculation
-  redo - Redo the last undone calculation
-  save - Save calculation history to file
-  load - Load calculation history from file
-  exit - Exit the calculator
+  add, subtract, multiply, divide, power, root,
+  modulus, int_divide, percent, abs_diff - Perform calculations
+
+  history  - Show calculation history
+  clear    - Clear calculation history
+  undo     - Undo last calculation
+  redo     - Redo last undone calculation
+  save     - Save history to file
+  load     - Load history from file
+  help     - Show this help menu
+  exit     - Exit the calculator
 """)
             return True
 
         elif command == "exit":
             try:
                 calc.save_history()
-                print("Goodbye!")
+                warn("Goodbye!")
             except Exception as e:
-                print(f"Warning: Failed to save history: {e}")
+                error(f"Warning: Failed to save history: {e}")
             return False
 
+        # ------------------------------------------------------
+        # Unknown Command Handling
+        # ------------------------------------------------------
         else:
-            print(f"Unknown command: {command}")
+            error(f"Unknown command: {command}")
             return True
 
+    # ------------------------------------------------------
+    # Error Handling (Validation, Operation, or General)
+    # ------------------------------------------------------
     except ValidationError as e:
-        print(f"Error: {e}")
+        error(f"Validation Error: {e}")
     except OperationError as e:
-        print(f"Error: {e}")
+        error(f"Operation Error: {e}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        error(f"Unexpected Error: {e}")
     return True
 
 
+# ----------------------------------------------------------
+# REPL Loop
+# ----------------------------------------------------------
 def calculator_repl(input_func=input):
-    """Main REPL loop for calculator — safe against mock recursion and fatal init errors."""
+    """Main REPL loop for interactive calculator usage."""
     try:
         Calculator = safe_import_calculator()
         calc = Calculator()
-        print("Calculator started. Type 'help' for commands.")
+        info("Calculator started. Type 'help' for commands.")
 
         while True:
             try:
-                cmd = input_func("\nEnter command: ").strip().lower()
+                cmd = input_func(Fore.YELLOW + "\nEnter command: " + Style.RESET_ALL).strip().lower()
                 if not _perform_command(calc, cmd, input_func):
                     break
             except KeyboardInterrupt:
-                print("\nOperation cancelled (Ctrl+C). Exiting REPL safely.")
+                warn("\nOperation cancelled (Ctrl+C). Exiting REPL safely.")
                 break
             except EOFError:
-                print("\nInput terminated (Ctrl+D). Exiting...")
+                warn("\nInput terminated (Ctrl+D). Exiting...")
                 break
             except Exception as e:
-                print(f"Unexpected error in REPL: {e}")
+                error(f"Unexpected error in REPL: {e}")
                 continue
 
     except Exception as e:
-        # Handle fatal init errors cleanly — do not re-raise to avoid pytest segfault
-        print(f"Fatal error: {e}")
-        return  # exit gracefully
+        # Handle fatal initialization errors
+        error(f"Fatal error: {e}")
+        return
 
 
 if __name__ == "__main__":

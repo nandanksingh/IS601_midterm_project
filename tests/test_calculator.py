@@ -1,7 +1,14 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 10/06/2025
-# Assignment 5 - Enhanced Calculator (Calculator Tests)
+# Date: 10/16/2025
+# Midterm Project: Enhanced Calculator (Calculator Tests)
+# ----------------------------------------------------------
+# Description:
+# Comprehensive test suite for app/calculator.py validating:
+# - Factory + Strategy integration for all operations
+# - Observer Pattern behavior
+# - History persistence (save/load/undo/redo)
+# - REPL command coverage and edge cases
 # ----------------------------------------------------------
 
 import datetime
@@ -17,7 +24,6 @@ from app.calculator_repl import calculator_repl, _perform_command
 from app.calculator_config import CalculatorConfig
 from app.exceptions import OperationError, ValidationError
 from app.history import LoggingObserver
-from app.operations import OperationFactory
 
 # ----------------------------------------------------------
 # Fixtures
@@ -59,7 +65,7 @@ def test_logging_setup(mock_log_info):
         mock_dir.return_value = Path("/tmp/logs")
         mock_file.return_value = Path("/tmp/logs/calculator.log")
         Calculator(CalculatorConfig())
-        mock_log_info.assert_any_call("Calculator initialized with configuration")
+        mock_log_info.assert_any_call("Calculator initialized successfully")
 
 def test_calculator_initializes_with_default_config():
     calc = Calculator()
@@ -77,30 +83,33 @@ def test_add_remove_observer(calculator):
     assert observer not in calculator.observers
 
 # ----------------------------------------------------------
-# Strategy Pattern
+# Factory + Strategy Pattern
 # ----------------------------------------------------------
 
-def test_set_operation(calculator):
-    operation = OperationFactory.create_operation("add")
-    calculator.set_operation(operation)
-    assert calculator.operation_strategy == operation
+def test_set_operation_factory_success(calculator):
+    calculator.set_operation("add")
+    assert calculator.operation_strategy is not None
+    assert "Addition" in str(calculator.operation_strategy)
+
+def test_set_operation_factory_invalid(calculator):
+    with pytest.raises(OperationError, match="Unknown operation"):
+        calculator.set_operation("invalid_op")
 
 # ----------------------------------------------------------
 # Operation Execution
 # ----------------------------------------------------------
 
 def test_perform_operation_addition(calculator):
-    operation = OperationFactory.create_operation("add")
-    calculator.set_operation(operation)
+    calculator.set_operation("add")
     result = calculator.perform_operation(2, 3)
     assert result == Decimal("5")
 
 def test_perform_operation_validation_error(calculator):
-    calculator.set_operation(OperationFactory.create_operation("add"))
+    calculator.set_operation("add")
     with pytest.raises(ValidationError):
         calculator.perform_operation("invalid", 3)
 
-def test_perform_operation_operation_error(calculator):
+def test_perform_operation_no_strategy(calculator):
     with pytest.raises(OperationError, match="No operation set"):
         calculator.perform_operation(2, 3)
 
@@ -109,8 +118,7 @@ def test_perform_operation_operation_error(calculator):
 # ----------------------------------------------------------
 
 def test_undo_redo_clear(calculator):
-    op = OperationFactory.create_operation("add")
-    calculator.set_operation(op)
+    calculator.set_operation("add")
     calculator.perform_operation(2, 3)
     calculator.undo()
     assert calculator.history == []
@@ -127,8 +135,7 @@ def test_undo_redo_clear(calculator):
 
 @patch("app.calculator.pd.DataFrame.to_csv")
 def test_save_history(mock_to_csv, calculator):
-    op = OperationFactory.create_operation("add")
-    calculator.set_operation(op)
+    calculator.set_operation("add")
     calculator.perform_operation(2, 3)
     calculator.save_history()
     mock_to_csv.assert_called_once()
@@ -158,16 +165,14 @@ def test_load_history_failure(mock_exists, mock_read_csv, calculator):
 # ----------------------------------------------------------
 
 def test_get_history_dataframe(calculator):
-    op = OperationFactory.create_operation("add")
-    calculator.set_operation(op)
+    calculator.set_operation("add")
     calculator.perform_operation(2, 3)
     df = calculator.get_history_dataframe()
     assert isinstance(df, pd.DataFrame)
     assert not df.empty
 
 def test_show_history_returns_formatted_strings(calculator):
-    op = OperationFactory.create_operation("add")
-    calculator.set_operation(op)
+    calculator.set_operation("add")
     calculator.perform_operation(2, 3)
     history = calculator.show_history()
     assert "Addition(2, 3) = 5" in history[0]
@@ -177,7 +182,6 @@ def test_show_history_returns_formatted_strings(calculator):
 # ----------------------------------------------------------
 
 def test_perform_command_all(monkeypatch):
-    """Covers all _perform_command branches without hanging."""
     calc = Calculator()
     monkeypatch.setattr("builtins.input", lambda _: "cancel")
 
@@ -187,23 +191,19 @@ def test_perform_command_all(monkeypatch):
 
 @patch("builtins.print")
 def test_repl_addition_integration(mock_print):
-    """Simulates REPL with controlled commands (never hangs)."""
     commands = iter(["add", "2", "3", "exit"])
     calculator_repl(input_func=lambda _: next(commands))
-    # Match tolerant to spaces/newlines
     assert any("Result" in str(call) and "5" in str(call)
                for call in mock_print.call_args_list)
 
 @patch("builtins.print")
 def test_repl_help_exit(mock_print):
-    """Checks help and exit sequence."""
     commands = iter(["help", "exit"])
     calculator_repl(input_func=lambda _: next(commands))
     assert any("Available commands" in str(call) for call in mock_print.call_args_list)
 
 @patch("builtins.print")
 def test_repl_exit_with_save(mock_print):
-    """Ensures REPL calls save_history() before exit."""
     with patch("app.calculator.Calculator.save_history") as mock_save:
         commands = iter(["exit"])
         calculator_repl(input_func=lambda _: next(commands))
