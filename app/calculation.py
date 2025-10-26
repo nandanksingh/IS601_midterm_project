@@ -1,134 +1,90 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 10/18/2025
-# Midterm Project - Enhanced Calculator (Calculation.py)
+# Date: 10/19/2025
+# Midterm Project: Enhanced Calculator Command-Line Application
+# File: app/calculation.py
 # ----------------------------------------------------------
 # Description:
-# Defines the Calculation model used throughout the calculator.
-# Handles arithmetic computation, validation, and persistence.
-# Includes serialization/deserialization support for pandas CSV history.
+# Defines the Calculation dataclass and CalculationFactory
+# for executing and recording arithmetic operations.
+#
+# Each Calculation object:
+#   - Stores operands (a, b), operation name, computed result, and timestamp.
+#   - Supports serialization to/from dictionaries for persistence.
+#   - Integrates with the History and Memento modules.
 # ----------------------------------------------------------
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-import datetime
+from typing import Dict, Callable
 import logging
-from typing import Any, Dict
 
 from app.exceptions import OperationError
 
 
+# ==========================================================
+# Dataclass: Calculation
+# ==========================================================
 @dataclass
 class Calculation:
-    """
-    Represents one mathematical calculation.
-    Automatically performs the computation on creation,
-    and provides methods for serialization via pandas.
-    """
+    """Represents a single arithmetic calculation record."""
 
     operation: str
-    operand1: Decimal
-    operand2: Decimal
-
+    a: Decimal
+    b: Decimal
     result: Decimal = field(init=False)
-    timestamp: datetime.datetime = field(default_factory=datetime.datetime.now)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
 
-    # ----------------------------------------------------------
-    # Initialization and automatic computation
-    # ----------------------------------------------------------
     def __post_init__(self):
-        """Run immediately after object creation to compute result."""
-        self.result = self.calculate()
+        """Compute result automatically once created."""
+        self.result = self.perform_operation()
 
-    # ----------------------------------------------------------
-    # Core arithmetic logic
-    # ----------------------------------------------------------
-    def calculate(self) -> Decimal:
-        """
-        Execute the math operation safely.
-        Raises OperationError for invalid or failed operations.
-        """
-        operations = {
-            "Addition": lambda x, y: x + y,
-            "Subtraction": lambda x, y: x - y,
-            "Multiplication": lambda x, y: x * y,
-            "Division": lambda x, y: x / y if y != 0 else self._raise_div_zero(),
-            "Power": lambda x, y: Decimal(pow(float(x), float(y))) if y >= 0 else self._raise_neg_power(),
-            "Root": lambda x, y: (
-                Decimal(pow(float(x), 1 / float(y)))
-                if x >= 0 and y != 0
-                else self._raise_invalid_root(x, y)
-            ),
-        }
+    def perform_operation(self) -> Decimal:
+        """Safely execute the registered operation."""
+        try:
+            x, y = Decimal(self.a), Decimal(self.b)
+        except (InvalidOperation, ValueError) as e:
+            raise OperationError(f"Invalid operands: {e}")
 
-        func = operations.get(self.operation)
+        func = CalculationFactory.operations.get(self.operation.lower())
         if not func:
             raise OperationError(f"Unknown operation: {self.operation}")
 
         try:
-            # Validate conversion to Decimal (ensures numeric input)
-            Decimal(self.operand1)
-            Decimal(self.operand2)
+            return func(x, y)
+        except (ArithmeticError, InvalidOperation, ValueError) as e:
+            msg = f"Calculation failed: {e}"
+            logging.error(msg)
+            raise OperationError(msg)
 
-            return func(self.operand1, self.operand2)
-
-        except (InvalidOperation, ValueError, ArithmeticError) as e:
-            raise OperationError(f"Calculation failed: {e}")
-
-    # ----------------------------------------------------------
-    # Error helper methods
-    # ----------------------------------------------------------
-    @staticmethod
-    def _raise_div_zero():
-        raise OperationError("Division by zero is not allowed")
-
-    @staticmethod
-    def _raise_neg_power():
-        raise OperationError("Negative exponents are not supported")
-
-    @staticmethod
-    def _raise_invalid_root(x: Decimal, y: Decimal):
-        if y == 0:
-            raise OperationError("Zero root is undefined")
-        if x < 0:
-            raise OperationError("Cannot calculate root of negative number")
-        raise OperationError("Invalid root operation")
-
-    # ----------------------------------------------------------
-    # Serialization for pandas CSV history
-    # ----------------------------------------------------------
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the calculation into a serializable dictionary.
-        Used for saving via pandas to CSV.
-        """
+    def to_dict(self) -> Dict[str, str]:
+        """Convert the Calculation to a serializable dictionary."""
         return {
             "operation": self.operation,
-            "operand_a": str(self.operand1),
-            "operand_b": str(self.operand2),
+            "a": str(self.a),
+            "b": str(self.b),
             "result": str(self.result),
             "timestamp": self.timestamp.isoformat(),
         }
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "Calculation":
-        """
-        Restore a Calculation object from dictionary data.
-        Used during CSV history loading.
-        """
+    def from_dict(data: Dict[str, str]) -> "Calculation":
+        """Rebuild a Calculation object from its dictionary form."""
         try:
+            a_key = "a" if "a" in data else "operand1"
+            b_key = "b" if "b" in data else "operand2"
+
             calc = Calculation(
                 operation=data["operation"],
-                operand1=Decimal(data.get("operand_a") or data.get("operand1")),
-                operand2=Decimal(data.get("operand_b") or data.get("operand2")),
+                a=Decimal(data[a_key]),
+                b=Decimal(data[b_key]),
             )
 
-            # Preserve saved timestamp
             if "timestamp" in data:
-                calc.timestamp = datetime.datetime.fromisoformat(str(data["timestamp"]))
+                calc.timestamp = datetime.fromisoformat(str(data["timestamp"]))
 
-            # Validate result consistency
-            saved_result = Decimal(data.get("result", "0"))
+            saved_result = Decimal(str(data.get("result", "0")))
             if calc.result != saved_result:
                 logging.warning(
                     f"Loaded result {saved_result} differs from computed result {calc.result}"
@@ -139,16 +95,20 @@ class Calculation:
         except (KeyError, InvalidOperation, ValueError) as e:
             raise OperationError(f"Invalid calculation data: {e}")
 
-    # ----------------------------------------------------------
-    # Display utilities
-    # ----------------------------------------------------------
-    def __str__(self) -> str:
-        return f"{self.operation}({self.operand1}, {self.operand2}) = {self.result}"
+    def format_result(self, precision: int = 3) -> str:
+        """Return result formatted to given precision."""
+        try:
+            q = Decimal("0." + "0" * precision)
+            return str(self.result.quantize(q).normalize())
+        except InvalidOperation:
+            return str(self.result)
 
-    def __repr__(self) -> str:
+    def __str__(self):
+        return f"{self.operation}({self.a}, {self.b}) = {self.result}"
+
+    def __repr__(self):
         return (
-            f"Calculation(operation='{self.operation}', "
-            f"operand1={self.operand1}, operand2={self.operand2}, "
+            f"Calculation(operation='{self.operation}', a={self.a}, b={self.b}, "
             f"result={self.result}, timestamp='{self.timestamp.isoformat()}')"
         )
 
@@ -157,24 +117,75 @@ class Calculation:
             return NotImplemented
         return (
             self.operation == other.operation
-            and self.operand1 == other.operand1
-            and self.operand2 == other.operand2
+            and self.a == other.a
+            and self.b == other.b
             and self.result == other.result
         )
 
-    # ----------------------------------------------------------
-    # Formatting helper
-    # ----------------------------------------------------------
-    def format_result(self, precision: int = 10) -> str:
-        """
-        Return a clean, rounded string version of the result.
-        Used for REPL display.
-        """
-        try:
-            return str(
-                self.result.normalize().quantize(
-                    Decimal("0." + "0" * precision)
-                ).normalize()
-            )
-        except InvalidOperation:
-            return str(self.result)
+
+# ==========================================================
+# Factory Pattern: CalculationFactory
+# ==========================================================
+class CalculationFactory:
+    """Factory registry for all supported operations."""
+
+    operations: Dict[str, Callable[[Decimal, Decimal], Decimal]] = {}
+
+    @classmethod
+    def register(cls, name: str):
+        """Decorator to register an operation function."""
+        def decorator(func: Callable[[Decimal, Decimal], Decimal]):
+            cls.operations[name.lower()] = func
+            return func
+        return decorator
+
+
+# ----------------------------------------------------------
+# Register Built-In Arithmetic Operations
+# ----------------------------------------------------------
+@CalculationFactory.register("add")
+def _add(x, y): return x + y
+
+@CalculationFactory.register("subtract")
+def _subtract(x, y): return x - y
+
+@CalculationFactory.register("multiply")
+def _multiply(x, y): return x * y
+
+@CalculationFactory.register("divide")
+def _divide(x, y):
+    if y == 0:
+        raise OperationError("Division by zero is not allowed")
+    return x / y
+
+@CalculationFactory.register("modulus")
+def _modulus(x, y):
+    if y == 0:
+        raise OperationError("Division by zero is not allowed")
+    return x % y
+
+@CalculationFactory.register("int_divide")
+def _int_divide(x, y):
+    if y == 0:
+        raise OperationError("Division by zero is not allowed")
+    return x // y
+
+@CalculationFactory.register("power")
+def _power(x, y): return x ** y
+
+@CalculationFactory.register("root")
+def _root(x, y):
+    if y == 0:
+        raise OperationError("Zero root is undefined")
+    if x < 0:
+        raise OperationError("Cannot calculate root of negative number")
+    return Decimal(pow(float(x), 1 / float(y)))
+
+@CalculationFactory.register("percent")
+def _percent(x, y):
+    if y == 0:
+        raise OperationError("Division by zero is not allowed")
+    return (x / y) * 100
+
+@CalculationFactory.register("abs_diff")
+def _abs_diff(x, y): return abs(x - y)

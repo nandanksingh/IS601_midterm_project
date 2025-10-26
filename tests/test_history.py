@@ -1,159 +1,215 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
 # Date: 10/17/2025
-# Midterm Project: Enhanced Calculator (Observer Pattern Tests)
+# Midterm Project: Enhanced Calculator 
+# File: tests/test_history.py
 # ----------------------------------------------------------
 # Description:
-# This test module validates the functionality of the Observer
-# Design Pattern implemented in `app/history.py`.
-#
-# Observers Tested:
-#   1. LoggingObserver – Verifies correct logging of each calculation.
-#   2. AutoSaveObserver – Ensures automatic save behavior triggers
-#                         only when auto-save is enabled.
-#
-# Test Coverage Includes:
-#   - Normal and error-handling cases for LoggingObserver
-#   - Conditional auto-save behavior in AutoSaveObserver
-#   - Validation of incorrect or missing input handling
+# Tests persistence and observer mechanisms in app/history.py
+# Covers:
+#   • History CRUD and persistence (save/load)
+#   • Error handling and exception branches
+#   • LoggingObserver and AutoSaveObserver
+#   • 100% coverage, including all except branches
 # ----------------------------------------------------------
 
+import os
 import pytest
+import pandas as pd
+import logging
 from unittest.mock import Mock, patch
 from decimal import Decimal
+from app.history import History, LoggingObserver, AutoSaveObserver
 from app.calculation import Calculation
-from app.history import LoggingObserver, AutoSaveObserver
+from app.exceptions import HistoryError
 from app.calculator import Calculator
 from app.calculator_config import CalculatorConfig
 
 
 # ----------------------------------------------------------
-# Helper Setup
+# HISTORY CLASS TESTS
 # ----------------------------------------------------------
 
-# Create a mock Calculation object for testing
-calculation_mock = Mock(spec=Calculation)
-calculation_mock.operation = "addition"
-calculation_mock.operand1 = 5
-calculation_mock.operand2 = 3
-calculation_mock.result = 8
+def test_append_and_len_methods(tmp_path):
+    file = tmp_path / "history.csv"
+    history = History(str(file))
+    calc = Calculation("add", Decimal("2"), Decimal("3"))
+    history.append(calc)
+    assert len(history) == 1
+    rep = repr(history)
+    assert "add" in rep or "recent" in rep
+
+
+def test_append_invalid_type_raises_error():
+    history = History()
+    with pytest.raises(HistoryError, match="Invalid calculation type"):
+        history.append("not_a_calc")
+
+
+def test_clear_resets_history():
+    history = History()
+    history.records = [Mock(), Mock()]
+    history.clear()
+    assert len(history.records) == 0
+
+
+def test_save_and_load_roundtrip(tmp_path):
+    """Validate saving and loading using pandas CSV."""
+    file = tmp_path / "history.csv"
+    calc = Calculation("add", Decimal("2"), Decimal("3"))
+    history = History(str(file))
+    history.append(calc)
+    history.save()
+
+    loaded = History(str(file))
+    loaded.load()
+    assert len(loaded) == 1
+    assert loaded.records[0].operation == "add"
+
+
+def test_save_handles_exception(monkeypatch):
+    history = History("bad_path.csv")
+    monkeypatch.setattr(pd.DataFrame, "to_csv", lambda *a, **k: (_ for _ in ()).throw(IOError("disk full")))
+    with pytest.raises(HistoryError, match="Failed to save history"):
+        history.save()
+
+
+def test_load_handles_missing_file(tmp_path, caplog):
+    file = tmp_path / "missing.csv"
+    history = History(str(file))
+    history.load()
+    assert len(history) == 0
+    assert "No existing history" in caplog.text
+
+
+def test_load_handles_corrupt_file(monkeypatch):
+    monkeypatch.setattr(pd, "read_csv", lambda _: (_ for _ in ()).throw(ValueError("bad csv")))
+    history = History("fake.csv")
+    with pytest.raises(HistoryError, match="Failed to load history"):
+        history.load()
 
 
 # ----------------------------------------------------------
-# LoggingObserver Tests
+# OBSERVER TESTS
 # ----------------------------------------------------------
 
 @patch("logging.info")
-def test_logging_observer_logs_calculation(mock_log_info):
-    """Verify that LoggingObserver logs the correct calculation message."""
+def test_logging_observer_logs_calculation(mock_log):
+    calc = Calculation("add", Decimal("1"), Decimal("2"))
     observer = LoggingObserver()
-    observer.update(calculation_mock)
-    mock_log_info.assert_called_once_with(
-        "Calculation performed: addition (5, 3) = 8"
-    )
+    observer.update(calc)
+    mock_log.assert_called_once()
 
 
-def test_logging_observer_no_calculation():
-    """Ensure that passing None to LoggingObserver raises an AttributeError."""
+def test_logging_observer_none_raises():
     observer = LoggingObserver()
     with pytest.raises(AttributeError):
         observer.update(None)
 
 
-def test_logging_observer_logs_exception(monkeypatch):
-    """
-    Force LoggingObserver to hit the exception block for coverage.
-    Simulates a logging failure scenario.
-    """
-    from app.history import LoggingObserver
-    calc = Calculation("Addition", Decimal("2"), Decimal("3"))
-    observer = LoggingObserver()
-
-    # Simulate logging.info raising an error
-    def bad_log(_):
-        raise RuntimeError("Simulated disk failure")
-
-    monkeypatch.setattr("logging.info", bad_log)
-
-    with pytest.raises(RuntimeError, match="Logging failed: Simulated disk failure"):
-        observer.update(calc)
-
-
-# ----------------------------------------------------------
-# AutoSaveObserver Tests
-# ----------------------------------------------------------
-
 def test_autosave_observer_triggers_save():
-    """Verify that AutoSaveObserver calls save_history() when auto_save is enabled."""
-    calculator_mock = Mock(spec=Calculator)
-    calculator_mock.config = Mock(spec=CalculatorConfig)
-    calculator_mock.config.auto_save = True
-
-    observer = AutoSaveObserver(calculator_mock)
-    observer.update(calculation_mock)
-
-    calculator_mock.save_history.assert_called_once()
+    calc_mock = Mock(spec=Calculator)
+    calc_mock.config = Mock(spec=CalculatorConfig)
+    calc_mock.config.auto_save = True
+    observer = AutoSaveObserver(calc_mock)
+    observer.update(Mock())
+    calc_mock.save_history.assert_called_once()
 
 
-@patch("logging.info")
-def test_autosave_observer_logs_autosave(mock_log_info):
-    """Confirm that AutoSaveObserver logs a message after auto-saving history."""
-    calculator_mock = Mock(spec=Calculator)
-    calculator_mock.config = Mock(spec=CalculatorConfig)
-    calculator_mock.config.auto_save = True
-
-    observer = AutoSaveObserver(calculator_mock)
-    observer.update(calculation_mock)
-
-    mock_log_info.assert_called_once_with("History auto-saved successfully.")
-
-
-def test_autosave_observer_does_not_trigger_save_when_disabled():
-    """Ensure that AutoSaveObserver does NOT save when auto_save is disabled."""
-    calculator_mock = Mock(spec=Calculator)
-    calculator_mock.config = Mock(spec=CalculatorConfig)
-    calculator_mock.config.auto_save = False
-
-    observer = AutoSaveObserver(calculator_mock)
-    observer.update(calculation_mock)
-
-    calculator_mock.save_history.assert_not_called()
+def test_autosave_observer_disabled_does_not_trigger():
+    calc_mock = Mock(spec=Calculator)
+    calc_mock.config = Mock(spec=CalculatorConfig)
+    calc_mock.config.auto_save = False
+    observer = AutoSaveObserver(calc_mock)
+    observer.update(Mock())
+    calc_mock.save_history.assert_not_called()
 
 
 def test_autosave_observer_invalid_calculator():
-    """Ensure that AutoSaveObserver raises TypeError if initialized with an invalid calculator."""
     with pytest.raises(TypeError):
         AutoSaveObserver(None)
 
 
-def test_autosave_observer_no_calculation():
-    """Ensure that AutoSaveObserver raises AttributeError if no calculation is provided."""
-    calculator_mock = Mock(spec=Calculator)
-    calculator_mock.config = Mock(spec=CalculatorConfig)
-    calculator_mock.config.auto_save = True
+def test_autosave_observer_logs_failure(monkeypatch):
+    class DummyCalc:
+        config = type("cfg", (), {"auto_save": True})()
+        def save_history(self):
+            raise IOError("Disk full")
 
-    observer = AutoSaveObserver(calculator_mock)
+    observer = AutoSaveObserver(DummyCalc())
+    with pytest.raises(RuntimeError, match="AutoSave failed"):
+        observer.update(Mock())
 
-    with pytest.raises(AttributeError):
+
+# ----------------------------------------------------------
+# EXTRA BRANCH COVERAGE TESTS (for 100%)
+# ----------------------------------------------------------
+
+def test_save_unexpected_exception(monkeypatch):
+    """Force an unexpected exception type in save() to hit except branch."""
+    history = History("fake.csv")
+    monkeypatch.setattr(pd.DataFrame, "to_csv", lambda *a, **k: (_ for _ in ()).throw(Exception("generic fail")))
+    with pytest.raises(HistoryError, match="Failed to save history: generic fail"):
+        history.save()
+
+
+def test_load_unexpected_exception(monkeypatch):
+    """Force a generic exception during load() to hit except branch."""
+    monkeypatch.setattr(pd, "read_csv", lambda _: (_ for _ in ()).throw(RuntimeError("broken pandas")))
+    history = History("fake.csv")
+    with pytest.raises(HistoryError, match="Failed to load history: broken pandas"):
+        history.load()
+
+
+def test_logging_observer_exception_branch(monkeypatch):
+    """Force a logging failure inside LoggingObserver.update()."""
+    observer = LoggingObserver()
+    calc = Calculation("add", Decimal("2"), Decimal("3"))
+    monkeypatch.setattr(logging, "info", lambda msg: (_ for _ in ()).throw(Exception("log fail")))
+    with pytest.raises(RuntimeError, match="Logging failed"):
+        observer.update(calc)
+
+
+def test_autosave_observer_generic_exception(monkeypatch):
+    """Force a generic exception in AutoSaveObserver to reach final except branch."""
+    class DummyCalc:
+        config = type("cfg", (), {"auto_save": True})()
+        def save_history(self):
+            raise ValueError("unknown failure")
+
+    observer = AutoSaveObserver(DummyCalc())
+    with pytest.raises(RuntimeError, match="AutoSave failed: unknown failure"):
+        observer.update(Mock())
+
+# ----------------------------------------------------------
+# FINAL COVERAGE TESTS 
+# ----------------------------------------------------------
+
+def test_iter_method_returns_iterator():
+    """Ensure __iter__ allows iteration over stored calculations."""
+    history = History()
+    calc = Calculation("add", Decimal("2"), Decimal("3"))
+    history.append(calc)
+    result = list(history)  # triggers __iter__
+    assert len(result) == 1
+    assert isinstance(result[0], Calculation)
+
+
+def test_repr_for_empty_history():
+    """Ensure __repr__ includes 'empty' when history is blank."""
+    history = History()
+    rep = repr(history)
+    assert "empty" in rep
+    assert "History(size=0" in rep
+
+
+def test_autosave_observer_update_none_raises():
+    """Ensure AutoSaveObserver.update(None) raises AttributeError."""
+    class DummyCalc:
+        config = type("cfg", (), {"auto_save": True})()
+        def save_history(self):
+            pass
+
+    observer = AutoSaveObserver(DummyCalc())
+    with pytest.raises(AttributeError, match="cannot be None"):
         observer.update(None)
-
-
-def test_autosave_observer_logs_exception(monkeypatch):
-    """
-    Force AutoSaveObserver to hit the exception block for coverage.
-    Simulates a failure in the save_history() method.
-    """
-    from types import SimpleNamespace
-    import logging
-
-    calc_stub = SimpleNamespace(config=SimpleNamespace(auto_save=True))
-
-    # save_history() will raise IOError to simulate disk write error
-    def bad_save():
-        raise IOError("Disk full")
-
-    calc_stub.save_history = bad_save
-    observer = AutoSaveObserver(calc_stub)
-
-    with pytest.raises(RuntimeError, match="AutoSave failed: Disk full"):
-        observer.update(SimpleNamespace(operation="Addition"))

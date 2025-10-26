@@ -1,48 +1,50 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
 # Date: 10/18/2025
-# Midterm Project: Enhanced Calculator Command-Line Application (Exception Hierarchy)
+# Midterm Project: Enhanced Calculator Command-Line Application
+# File: app/exceptions.py
 # ----------------------------------------------------------
 # Description:
-# Defines a clear and extensible exception hierarchy for the calculator.
-# Enables unified, meaningful, and precise error handling across modules.
+# Defines a structured exception hierarchy for the Enhanced Calculator.
+# Each subclass targets a specific error domain such as input validation,
+# configuration, operation failures, or history management.
 # ----------------------------------------------------------
 
-class CalculatorError(Exception):
-    """
-    Base exception class for calculator-specific errors.
 
-    All custom exceptions for the calculator application inherit from this class,
-    allowing unified error handling and consistent messaging across the project.
-    """
-    pass
+class CalculatorError(Exception):
+    """Base class for all calculator-specific exceptions."""
+    def __init__(self, message: str = "An unexpected calculator error occurred"):
+        super().__init__(message)
 
 
 class ValidationError(CalculatorError):
-    """
-    Raised when input validation fails.
-
-    Triggered when user inputs are not numeric, exceed allowed limits,
-    or violate validation constraints.
-    """
-    pass
+    """Raised when user input validation fails."""
+    def __init__(self, message: str = "Invalid input provided"):
+        super().__init__(message)
 
 
 class OperationError(CalculatorError):
-    """
-    Raised when a calculation operation fails.
-
-    Used for arithmetic failures such as division by zero, undefined operations,
-    or data-related issues during computation.
-    """
-    pass
+    """Raised when an arithmetic or logical operation fails."""
+    def __init__(self, message: str = "Operation failed"):
+        super().__init__(message)
 
 
-class ConfigurationError(CalculatorError):
-    """
-    Raised when calculator configuration is invalid.
+class ConfigError(CalculatorError):
+    """Raised when configuration (.env or precision settings) is invalid."""
+    def __init__(self, message: str = "Configuration error"):
+        super().__init__(message)
 
-    Occurs when environment variables, file paths, or configuration parameters
-    are missing or set incorrectly.
-    """
-    pass
+
+class HistoryError(CalculatorError):
+    """Raised for persistence or history management issues."""
+    def __init__(self, message: str = "History management error"):
+        super().__init__(message)
+
+
+__all__ = [
+    "CalculatorError",
+    "ValidationError",
+    "OperationError",
+    "ConfigError",
+    "HistoryError",
+]

@@ -4,203 +4,207 @@
 # Midterm Project: Enhanced Calculator Command-Line Application
 # ----------------------------------------------------------
 
-### **Project Overview**
+## Overview
 
-This project is an enhanced version of a command-line calculator application developed using **Object-Oriented Programming principles** and **design patterns**.
-The goal of the project is to create a modular, maintainable, and testable Python program that demonstrates real-world software engineering practices.
+The **Enhanced Calculator** is a command-line application developed in Python that demonstrates the practical use of **object-oriented programming (OOP)** and **software design patterns**.
+This project extends a simple calculator into a full-featured, modular, and interactive program capable of performing a wide range of mathematical operations with data persistence and automated testing.
 
-The calculator can perform a variety of mathematical operations, maintain calculation history, support undo/redo functionality, and persist data using CSV files.
-The application also includes **color-coded terminal output** for better readability and **automated testing with GitHub Actions** to ensure continuous integration.
+It incorporates several core design patterns — **Factory**, **Memento**, and **Observer** — to manage operations, history, and state changes efficiently.
+Additionally, it includes two advanced enhancements that make the program both dynamic and user-friendly:
 
----
+1. A **Dynamic Help Menu** using the **Decorator Pattern**, and
+2. **Color-Coded Output** using the **Colorama** library.
 
-### **Installation Instructions**
-
-1. **Repository**
-
-   ```bash
-      cd IS601_midterm_project
-   ```
-
-2. **Create and Activate Virtual Environment**
-
-   ```bash
-   python -m venv venv
-   python3 -m venv venv
-   source venv/bin/activate        
-   ```
-
-3. **Install Required Packages**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
+Together, these features provide a professional and maintainable foundation for Python application development with CI/CD integration and full unit testing.
 
 ---
 
-### **Configuration Setup**
+## Key Features
 
-Create a `.env` file in the project’s root directory and add the following variables:
+### Core Functionalities
 
+* **Factory Pattern:** Dynamically generates operation objects (Add, Subtract, Multiply, etc.) without changing the calculator logic.
+* **Memento Pattern:** Enables Undo and Redo capabilities by saving and restoring the calculator’s state.
+* **Observer Pattern:** Triggers actions automatically — such as logging and saving history — when a new calculation occurs.
+* **History Management:** Saves, loads, and clears calculation history using pandas for CSV persistence.
+* **Error Handling:** Provides meaningful error messages for invalid inputs, division by zero, or unexpected runtime issues.
+* **Logging:** Automatically logs every calculation and error event for traceability and debugging.
+* **CI/CD Pipeline:** Integrated with GitHub Actions to automatically test every push and enforce 90% coverage.
+
+---
+
+## Supported Operations
+
+| Command                         | Description                       |
+| ------------------------------- | --------------------------------- |
+| add, subtract, multiply, divide | Perform arithmetic operations     |
+| power, root, modulus            | Perform advanced calculations     |
+| int_divide, percent, abs_diff   | Perform extended calculations     |
+| undo / redo                     | Undo or redo the last operation   |
+| history                         | Show calculation history          |
+| save / load                     | Save or load history using pandas |
+| clear                           | Clear calculation history         |
+| help                            | Show dynamic help menu            |
+| exit                            | Exit the program                  |
+
+---
+
+## Advanced Features
+
+### Dynamic Help Menu (Decorator Pattern)
+
+The **Dynamic Help Menu** is implemented using the **Decorator Design Pattern**.
+Each command in the REPL interface is registered dynamically through decorators.
+This means whenever a new operation is added, it automatically appears in the help menu — without changing any other part of the code.
+
+This approach simplifies maintenance and ensures that the help documentation is always synchronized with the actual available commands.
+It’s a clean example of extensibility — one of the most valuable concepts in software design.
+
+---
+
+### Color-Coded Output (Colorama)
+
+To make the REPL interface more readable and visually appealing, the program uses **Colorama** for color-coded terminal output:
+
+***Green** → Successful results or confirmations
+***Yellow** → Informational or warning messages
+***Red** → Errors or invalid inputs
+
+Example:
+```python
+from colorama import Fore, Style
+print(Fore.GREEN + "Result: 25" + Style.RESET_ALL)
+print(Fore.RED + "Error: Division by zero!" + Style.RESET_ALL)
 ```
-LOG_DIR=logs
-HISTORY_DIR=data
-HISTORY_FILE=data/history.csv
-AUTO_SAVE=true
-MAX_HISTORY_SIZE=100
-```
-
-* `LOG_DIR` → Folder to store log files
-* `HISTORY_FILE` → File path where calculator history is saved
-* `AUTO_SAVE` → Automatically save calculation history after every operation
-* `MAX_HISTORY_SIZE` → Maximum number of history entries to keep in memory
+Color feedback enhances usability, helps users quickly recognize results or errors, and gives the calculator a polished, professional feel.
 
 ---
+## Setup Instructions
 
-### **How to Run the Application**
-
-Run the calculator from the terminal using:
-
+### Create and Activate a Virtual Environment
+```bash
+python3 -m venv venv
+venv\Scripts\activate          
+```
+### Install Required Packages
+```bash
+pip install -r requirements.txt
+```
+### Run the Application
 ```bash
 python main.py
 ```
-
-You will see:
-
+If the setup is correct, you’ll see:
 ```
-Calculator started. Type 'help' for commands.
+=== Starting Enhanced Calculator ===
+Type 'help' to see available commands.
+>
 ```
 
-Type any command (like `add`, `subtract`, or `history`) and follow the prompts.
-All outputs are color-coded for better visibility.
+## Environment Configuration
+
+Create a `.env` file in the root folder and include:
+```
+CALCULATOR_LOG_DIR=logs
+CALCULATOR_HISTORY_DIR=history
+CALCULATOR_MAX_HISTORY_SIZE=10
+CALCULATOR_AUTO_SAVE=True
+CALCULATOR_PRECISION=9
+CALCULATOR_MAX_INPUT_VALUE=100000
+CALCULATOR_DEFAULT_ENCODING=utf-8
+```
+These settings control log storage, history limits, precision, and general behavior.
 
 ---
 
-### **Supported Commands**
+## Using the Calculator
 
-| Command                                                  | Description                               |
-| -------------------------------------------------------- | ----------------------------------------- |
-| `add`, `subtract`, `multiply`, `divide`, `power`, `root` | Perform basic operations                  |
-| `modulus`, `int_divide`, `percent`, `abs_diff`           | Perform advanced operations               |
-| `history`                                                | Display the list of previous calculations |
-| `clear`                                                  | Clear calculator history                  |
-| `undo`, `redo`                                           | Undo or redo the last operation           |
-| `save`, `load`                                           | Save or load history from a CSV file      |
-| `help`                                                   | Show all available commands               |
-| `exit`                                                   | Exit the calculator safely                |
+Once running, type commands directly in the REPL prompt:
+
+| Command     | Example Input   | Description                         |
+| ----------- | --------------- | ----------------------------------- |
+| add         | `add 5 3`       | Adds two numbers                    |
+| divide      | `divide 10 2`   | Divides first number by second      |
+| power       | `power 2 4`     | Raises 2 to the power of 4          |
+| percent     | `percent 45 50` | Finds percentage (90%)              |
+| undo / redo | -               | Undo or redo last action            |
+| history     | -               | Show stored calculations            |
+| clear       | -               | Clear all saved history             |
+| help        | -               | Show available commands dynamically |
+| exit        | -               | Exit gracefully                     |
 
 ---
 
-### **Testing Instructions**
+## Testing and Coverage
 
-All tests are written using **pytest** with coverage reporting enabled.
-
-Run all tests:
-
+Run all tests with:
 ```bash
-pytest
+pytest -v
 ```
-
-Run tests with coverage report:
-
+Generate coverage:
 ```bash
-pytest --cov=app --cov-report=term-missing
+pytest --cov=app --cov-report=term-missing --cov-report=html
 ```
 
-To ensure high code quality, the CI/CD workflow enforces at least **90% test coverage**.
+**Expected Output:**
+```
+TOTAL 703 statements — 100% coverage
+190 passed, 0 failed
+```
+To view detailed coverage results:
+```
+htmlcov/index.html
+```
+This ensures all code paths, including exception handling and decorators, are validated.
 
 ---
 
-### **CI/CD Workflow (GitHub Actions)**
+## Continuous Integration (CI/CD)
 
-The GitHub Actions workflow automatically runs whenever you push code to the `main` branch or open a pull request.
+The project uses **GitHub Actions** to automatically run tests and check coverage on every push or pull request.
+The workflow performs the following steps:
 
-**Workflow steps include:**
+1. Check out repository code
+2. Set up Python environment
+3. Install dependencies
+4. Run pytest with coverage
+5. Enforce 100% coverage threshold
 
-1. Checking out the code repository
-2. Setting up Python environment
-3. Installing dependencies
-4. Running all tests using `pytest`
-5. Failing the build if test coverage drops below 90%
-
-This ensures that every code change is validated automatically before merging.
-
----
-
-### **Code Design and Patterns Used**
-
-| Design Pattern           | Role in Project                                                 |
-| ------------------------ | --------------------------------------------------------------- |
-| **Factory**              | Dynamically creates operation objects (e.g., Add, Divide, Root) |
-| **Strategy**             | Allows operations to be executed independently                  |
-| **Observer**             | Updates log and auto-save behavior automatically                |
-| **Memento**              | Enables undo and redo features                                  |
-| **Decorator (optional)** | Can generate a dynamic help menu                                |
-| **Colorama**             | Adds color to console output for clarity                        |
+Workflow file:
+```
+.github/workflows/tests.yml
+```
+If coverage falls below 100%, the pipeline fails — ensuring complete test validation and maintaining the highest standard of software quality.
 
 ---
+## Logging and Data Storage
 
-### **Logging and History Management**
-
-All calculator activities are logged automatically in the `logs/` folder.
-Every calculation, undo, redo, or load/save event is recorded with timestamps.
+* Every calculation and result is logged using Python’s built-in logging module.
+* Each calculation (operation, operands, result, timestamp) is stored in a CSV file using pandas.
+* History and log files are managed via `.env` paths, ensuring separation of data and logic.
 
 Example log entry:
-
 ```
-2025-10-16 14:32:10 - INFO - Performed operation: Addition(2, 3) = 5
-```
-
-Calculation history is stored in a CSV file (`data/history.csv`), which can be viewed or reloaded during later sessions.
-
----
-
-### **Best Practices Followed**
-
-* **DRY Principle:** Avoided repetitive code through modular design.
-* **Modular Structure:** Each feature is placed in a dedicated file for clarity.
-* **Error Handling:** Custom exception classes for safe and readable error messages.
-* **Logging:** Centralized log configuration ensures full traceability.
-* **CI/CD:** Continuous testing with GitHub Actions ensures reliability.
-
----
-
-### **Project Folder Structure**
-
-```
-IS601_midterm_project/
-│
-├── app/
-│   ├── calculator.py
-│   ├── calculation.py
-│   ├── operations.py
-│   ├── calculator_repl.py
-│   ├── calculator_config.py
-│   ├── calculator_memento.py
-│   ├── input_validators.py
-│   ├── exceptions.py
-│   ├── logger.py
-│   └── history.py
-│
-├── tests/
-│   ├── test_calculator.py
-│   ├── test_calculator_repl.py
-│   └── test_operations.py
-│
-├── .github/workflows/python-app.yml
-├── requirements.txt
-├── .env
-├── main.py
-└── README.md
+2025-10-21 18:42:05,613 - INFO - Performed operation: Addition(2, 3) = 5
 ```
 
 ---
+## Reflection and Learning
 
-### **Conclusion**
+Working on this project was an insightful experience.
+I learned how applying **design patterns** like Factory, Observer, and Memento can transform a basic script into a modular, scalable system.
+Building a dynamic help system through decorators taught me the power of extensibility, and adding **color-coded terminal feedback** helped me focus on user experience.
 
-This project helped me apply advanced Python concepts such as design patterns, modular architecture, and continuous integration.
-Through this assignment, I gained a deeper understanding of how to structure complex applications, manage code testing, and automate validation using GitHub Actions.
-
-It was a valuable learning experience in both software engineering and collaborative development workflows.
+I also gained hands-on experience with **pytest**, **mock testing**, and **GitHub Actions** for CI/CD automation.
+Achieving **100% code coverage** was especially rewarding — it demonstrated the value of testing in maintaining software reliability.
+Most importantly, this project helped me connect theoretical software engineering concepts with real-world application design.
 
 ---
+
+## Conclusion
+
+The **Enhanced Calculator** represents more than a math tool — it is a demonstration of clean software architecture, modular design, and automated testing in Python.
+It showcases how careful planning, reusable design patterns, and strong testing practices can produce software that is not only functional but also maintainable, user-friendly, and professional.
+
+---
+

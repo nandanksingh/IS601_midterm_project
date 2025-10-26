@@ -2,29 +2,16 @@
 # Author: Nandan Kumar
 # Date: 10/17/2025
 # Midterm Project: Enhanced Calculator (Configuration Management)
+# File: app/calculator_config.py
 # ----------------------------------------------------------
 # Description:
-# This module defines the CalculatorConfig class responsible for
-# loading, validating, and managing configuration parameters for
-# the enhanced calculator application.
-#
+# Defines the CalculatorConfig dataclass that manages all
+# configuration parameters for the Enhanced Calculator.
 # Features:
-# - Loads configuration from environment variables (.env file)
-# - Uses python-dotenv for flexible setup
-# - Provides safe defaults for all parameters
-# - Validates numeric and directory constraints
-#
-# Environment Variables Supported:
-#   CALCULATOR_BASE_DIR
-#   CALCULATOR_LOG_DIR
-#   CALCULATOR_HISTORY_DIR
-#   CALCULATOR_LOG_FILE
-#   CALCULATOR_HISTORY_FILE
-#   CALCULATOR_MAX_HISTORY_SIZE
-#   CALCULATOR_AUTO_SAVE
-#   CALCULATOR_PRECISION
-#   CALCULATOR_MAX_INPUT_VALUE
-#   CALCULATOR_DEFAULT_ENCODING
+#   • Loads settings from .env using python-dotenv
+#   • Provides safe defaults when environment variables are missing
+#   • Allows constructor arguments to override environment variables
+#   • Validates numeric and directory settings
 # ----------------------------------------------------------
 
 from dataclasses import dataclass
@@ -35,10 +22,10 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
-from app.exceptions import ConfigurationError
+from app.exceptions import ConfigError
 
 # ----------------------------------------------------------
-# Load environment variables from the .env file (if present)
+# Load environment variables from .env (if present)
 # ----------------------------------------------------------
 load_dotenv()
 
@@ -47,15 +34,7 @@ load_dotenv()
 # Utility Function
 # ----------------------------------------------------------
 def get_project_root() -> Path:
-    """
-    Determine the project root directory.
-
-    This function resolves the project root dynamically by navigating
-    two levels up from the current file’s location.
-
-    Returns:
-        Path: The absolute path to the project root directory.
-    """
+    """Return the project root directory path."""
     return Path(__file__).resolve().parent.parent
 
 
@@ -65,13 +44,23 @@ def get_project_root() -> Path:
 @dataclass
 class CalculatorConfig:
     """
-    Configuration class for the calculator application.
+    Manages configuration for the Enhanced Calculator.
 
-    Handles environment-based configuration management, directory setup,
-    and parameter validation for calculation precision, history size,
-    auto-save, and encoding preferences.
+    Loads environment variables via python-dotenv and provides
+    defaults for missing values. Constructor arguments always
+    override environment values.
     """
 
+    base_dir: Optional[Path] = None
+    max_history_size: Optional[int] = None
+    auto_save: Optional[bool] = None
+    precision: Optional[int] = None
+    max_input_value: Optional[Number] = None
+    default_encoding: Optional[str] = None
+
+    # ------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------
     def __init__(
         self,
         base_dir: Optional[Path] = None,
@@ -81,65 +70,67 @@ class CalculatorConfig:
         max_input_value: Optional[Number] = None,
         default_encoding: Optional[str] = None,
     ):
-        """
-        Initialize configuration parameters using environment variables
-        or provided argument values.
-        """
-        # Determine project root or use provided base directory
         project_root = get_project_root()
         self.base_dir = base_dir or Path(
             os.getenv("CALCULATOR_BASE_DIR", str(project_root))
         ).resolve()
 
         # -------------------------------
-        # History Management Settings
+        # History and Auto-Save Settings
         # -------------------------------
-        self.max_history_size = max_history_size or int(
-            os.getenv("CALCULATOR_MAX_HISTORY_SIZE", "1000")
+        self.max_history_size = int(
+            max_history_size
+            if max_history_size is not None
+            else os.getenv("CALCULATOR_MAX_HISTORY_SIZE", "1000")
         )
 
-        # Auto-save flag (convert from string)
-        auto_save_env = os.getenv("CALCULATOR_AUTO_SAVE", "true").lower()
-        self.auto_save = auto_save if auto_save is not None else (
-            auto_save_env == "true" or auto_save_env == "1"
-        )
+        if auto_save is not None:
+            self.auto_save = bool(auto_save)
+        else:
+            auto_save_env = os.getenv("CALCULATOR_AUTO_SAVE", "true").lower()
+            self.auto_save = auto_save_env in ("true", "1", "yes")
 
         # -------------------------------
         # Calculation Settings
         # -------------------------------
-        self.precision = precision or int(
-            os.getenv("CALCULATOR_PRECISION", "10")
+        self.precision = int(
+            precision
+            if precision is not None
+            else os.getenv("CALCULATOR_PRECISION", "10")
         )
 
-        self.max_input_value = max_input_value or Decimal(
-            os.getenv("CALCULATOR_MAX_INPUT_VALUE", "1e999")
+        self.max_input_value = Decimal(
+            str(max_input_value)
+            if max_input_value is not None
+            else os.getenv("CALCULATOR_MAX_INPUT_VALUE", "1e999")
         )
 
-        self.default_encoding = default_encoding or os.getenv(
-            "CALCULATOR_DEFAULT_ENCODING", "utf-8"
+        self.default_encoding = (
+            default_encoding
+            if default_encoding is not None
+            else os.getenv("CALCULATOR_DEFAULT_ENCODING", "utf-8")
         )
 
     # ------------------------------------------------------
     # Directory and File Path Properties
     # ------------------------------------------------------
-
     @property
     def log_dir(self) -> Path:
-        """Return the directory where log files will be stored."""
+        """Return the directory for log files."""
         return Path(
             os.getenv("CALCULATOR_LOG_DIR", str(self.base_dir / "logs"))
         ).resolve()
 
     @property
     def history_dir(self) -> Path:
-        """Return the directory where history files will be stored."""
+        """Return the directory for history CSV files."""
         return Path(
             os.getenv("CALCULATOR_HISTORY_DIR", str(self.base_dir / "history"))
         ).resolve()
 
     @property
     def history_file(self) -> Path:
-        """Return the path to the CSV file storing calculation history."""
+        """Return the path to the calculator history CSV file."""
         return Path(
             os.getenv(
                 "CALCULATOR_HISTORY_FILE",
@@ -149,7 +140,7 @@ class CalculatorConfig:
 
     @property
     def log_file(self) -> Path:
-        """Return the path to the log file."""
+        """Return the path to the calculator log file."""
         return Path(
             os.getenv(
                 "CALCULATOR_LOG_FILE",
@@ -161,34 +152,29 @@ class CalculatorConfig:
     # Validation
     # ------------------------------------------------------
     def validate(self) -> None:
-        """
-        Validate all configuration parameters.
-
-        Ensures correctness of numeric parameters and verifies
-        directories exist or can be created.
-        """
-        # Numeric validations
+        """Validate all configuration parameters."""
         if self.max_history_size <= 0:
-            raise ConfigurationError("max_history_size must be positive")
+            raise ConfigError("max_history_size must be positive")
         if self.precision <= 0:
-            raise ConfigurationError("precision must be positive")
+            raise ConfigError("precision must be positive")
         if self.max_input_value <= 0:
-            raise ConfigurationError("max_input_value must be positive")
+            raise ConfigError("max_input_value must be positive")
 
-        # Directory checks
+        # Ensure required directories exist
         for directory in [self.log_dir, self.history_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
-        # Encoding validation
+        # Validate encoding
         try:
             "".encode(self.default_encoding)
         except LookupError:
-            raise ConfigurationError(
-                f"Unsupported encoding: {self.default_encoding}"
-            )
+            raise ConfigError(f"Unsupported encoding: {self.default_encoding}")
 
+    # ------------------------------------------------------
+    # Representation
+    # ------------------------------------------------------
     def __repr__(self):
-        """Provide a readable string summary for debugging and logs."""
+        """Return a formatted string for debugging."""
         return (
             f"CalculatorConfig("
             f"log_dir={self.log_dir}, "

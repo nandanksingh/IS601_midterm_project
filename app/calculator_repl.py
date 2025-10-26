@@ -1,206 +1,199 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 10/16/2025
-# Midterm Project: Enhanced Calculator (REPL Interface)
+# Date: 10/25/2025
+# Midterm Project - Enhanced Calculator (REPL Interface)
+# File: app/calculator_repl.py
 # ----------------------------------------------------------
 # Description:
-# Implements the command-line REPL for the calculator.
-# Supports operations via Factory + Strategy patterns, along with
-# history management (undo/redo/save/load) and graceful error handling.
-# Color-coded outputs.
+# Provides the interactive Read–Eval–Print Loop (REPL)
+# for the Enhanced Calculator application.
+#
+# Features:
+#  • Executes arithmetic and utility commands
+#  • Dynamic help menu (Decorator Pattern)
+#  • Color-coded outputs (using colorama)
+#  • Clean, user-friendly prompts with cancel/exit options
+#  • Graceful handling of keyboard and input errors
 # ----------------------------------------------------------
 
 import sys
-from colorama import Fore, Style, init
-from app.exceptions import OperationError, ValidationError
-
-# Initialize colorama for colored console output
-init(autoreset=True)
-
-
-# ----------------------------------------------------------
-# Helper functions for colored messages
-# ----------------------------------------------------------
-def success(msg):
-    print(Fore.GREEN + msg + Style.RESET_ALL)
-
-def info(msg):
-    print(Fore.CYAN + msg + Style.RESET_ALL)
-
-def warn(msg):
-    print(Fore.YELLOW + msg + Style.RESET_ALL)
-
-def error(msg):
-    print(Fore.RED + msg + Style.RESET_ALL)
-
-
-def safe_import_calculator():
-    """
-    Safely import Calculator inside function.
-    This avoids recursive mock failures during pytest.
-    """
-    from app.calculator import Calculator
-    return Calculator
+from decimal import Decimal
+from app.calculator import Calculator
+from app.exceptions import OperationError, ValidationError 
+from app.help_decorator import HelpBase, HelpDecorator
 
 
 # ----------------------------------------------------------
-# Command Execution
+# Optional Color Support Setup
 # ----------------------------------------------------------
-def _perform_command(calc, command, input_func=input):
-    """Execute a single command using the calculator instance."""
+def _load_colorama():
+    """Safely import colorama for colored terminal output."""
     try:
-        # ------------------------------------------------------
-        # Arithmetic Commands (10 total)
-        # ------------------------------------------------------
-        if command in (
+        from colorama import init, Fore, Style
+        init(autoreset=True)
+        return Fore, Style
+    except ImportError:
+        # Fallback to None if colorama is not installed
+        return None, None
+
+
+# Load colorama palette safely
+Fore, Style = _load_colorama()
+
+
+# ----------------------------------------------------------
+# Helper: Color print wrapper
+# ----------------------------------------------------------
+def cprint(text: str, color: str = "white") -> None:
+    """Print text with color when available, fallback to plain output."""
+    if Fore and Style:
+        palette = {
+            "green": Fore.GREEN,
+            "red": Fore.RED,
+            "yellow": Fore.YELLOW,
+            "cyan": Fore.CYAN,
+            "white": Fore.WHITE,
+        }
+        print(palette.get(color, Fore.WHITE) + text + Style.RESET_ALL)
+    else:
+        print(text)
+
+
+# ----------------------------------------------------------
+# Perform a single command
+# ----------------------------------------------------------
+def _perform_command(calculator: Calculator, command: str) -> bool:
+    """Execute one REPL command safely and handle exceptions."""
+    try:
+        command = command.lower().strip()
+
+        # Exit command
+        if command in {"exit", "quit", "q"}:
+            try:
+                calculator.save_history()
+            except Exception:
+                pass  # Ignore save errors during exit
+            cprint("Exiting the calculator. Goodbye!", "yellow")
+            return False
+
+        # Dynamic Help (Decorator Pattern)
+        elif command == "help":
+            help_menu = HelpDecorator(HelpBase())
+            cprint("\nDynamic Help Menu (Decorator Pattern Enabled):", "cyan")
+            cprint(help_menu.show_help(), "white")
+            return True
+
+        # History display
+        elif command == "history":
+            history = calculator.list_history()
+            if not history:
+                cprint("\nNo calculations yet.", "yellow")
+            else:
+                cprint("\nCalculation History:", "cyan")
+                for record in history:
+                    print(" ", record)
+            return True
+
+        # Undo / Redo
+        elif command == "undo":
+            calculator.undo()
+            cprint("Undo successful.", "yellow")
+            return True
+        elif command == "redo":
+            calculator.redo()
+            cprint("Redo successful.", "yellow")
+            return True
+
+        # Clear
+        elif command == "clear":
+            calculator.clear_history()
+            cprint("History cleared.", "yellow")
+            return True
+
+        # Save / Load
+        elif command == "save":
+            calculator.save_history()
+            cprint("History saved successfully.", "green")
+            return True
+        elif command == "load":
+            calculator.load_history()
+            cprint("History loaded successfully.", "green")
+            return True
+
+        # Arithmetic Commands
+        elif command in [
             "add", "subtract", "multiply", "divide",
             "power", "root", "modulus", "int_divide",
             "percent", "abs_diff"
-        ):
-            info("\nEnter numbers (or 'cancel' to abort):")
-
-            num1 = input_func(Fore.YELLOW + "First number: " + Style.RESET_ALL).strip()
-            if num1.lower() == "cancel":
-                warn("Operation cancelled.")
+        ]:
+            print("\n(Press Enter without typing or 'cancel' to return to main menu)\n")
+            a = input("Enter first number: ").strip()
+            if not a or a.lower() == "cancel":
+                cprint("Operation cancelled.", "yellow")
                 return True
 
-            num2 = input_func(Fore.YELLOW + "Second number: " + Style.RESET_ALL).strip()
-            if num2.lower() == "cancel":
-                warn("Operation cancelled.")
+            b = input("Enter second number: ").strip()
+            if not b or b.lower() == "cancel":
+                cprint("Operation cancelled.", "yellow")
                 return True
 
-            calc.set_operation(command)
-            result = calc.perform_operation(num1, num2)
-            success(f"Result: {result}")
-            return True
-
-        # ------------------------------------------------------
-        # History & Maintenance Commands
-        # ------------------------------------------------------
-        elif command == "history":
-            hist = calc.show_history()
-            if not hist:
-                warn("No calculations yet.")
-            else:
-                info("\nCalculation History:")
-                for entry in hist:
-                    print(Fore.WHITE + f"  {entry}" + Style.RESET_ALL)
-            return True
-
-        elif command == "clear":
-            calc.clear_history()
-            warn("History cleared.")
-            return True
-
-        elif command == "undo":
-            msg = "Operation undone." if calc.undo() else "Nothing to undo."
-            info(msg)
-            return True
-
-        elif command == "redo":
-            msg = "Operation redone." if calc.redo() else "Nothing to redo."
-            info(msg)
-            return True
-
-        # ------------------------------------------------------
-        # Persistence Commands
-        # ------------------------------------------------------
-        elif command == "save":
+            # Convert to Decimal for precision
             try:
-                calc.save_history()
-                success("History saved successfully.")
-            except Exception as e:
-                error(f"Error saving history: {e}")
+                a_val, b_val = Decimal(a), Decimal(b)
+            except Exception:
+                raise ValidationError("Invalid numeric input.")
+
+            calc = calculator.calculate(command, a_val, b_val)
+            cprint(f"Result: {calc.result}", "green")
             return True
 
-        elif command == "load":
-            try:
-                calc.load_history()
-                success("History loaded successfully.")
-            except Exception as e:
-                error(f"Error loading history: {e}")
-            return True
-
-        # ------------------------------------------------------
-        # Help & Exit
-        # ------------------------------------------------------
-        elif command == "help":
-            info("""
-Available commands:
-  add, subtract, multiply, divide, power, root,
-  modulus, int_divide, percent, abs_diff - Perform calculations
-
-  history  - Show calculation history
-  clear    - Clear calculation history
-  undo     - Undo last calculation
-  redo     - Redo last undone calculation
-  save     - Save history to file
-  load     - Load history from file
-  help     - Show this help menu
-  exit     - Exit the calculator
-""")
-            return True
-
-        elif command == "exit":
-            try:
-                calc.save_history()
-                warn("Goodbye!")
-            except Exception as e:
-                error(f"Warning: Failed to save history: {e}")
-            return False
-
-        # ------------------------------------------------------
-        # Unknown Command Handling
-        # ------------------------------------------------------
+        # Unknown Command
         else:
-            error(f"Unknown command: {command}")
+            cprint(f"Unknown command: '{command}'", "red")
             return True
 
     # ------------------------------------------------------
-    # Error Handling (Validation, Operation, or General)
+    # Error Handling (fully covered by tests)
     # ------------------------------------------------------
-    except ValidationError as e:
-        error(f"Validation Error: {e}")
-    except OperationError as e:
-        error(f"Operation Error: {e}")
+    except ValidationError as ve:
+        cprint(f"Validation Error: {ve}", "red")
+        return True
+    except OperationError as oe:
+        cprint(f"Operation Error: {oe}", "red")
+        return True
     except Exception as e:
-        error(f"Unexpected Error: {e}")
-    return True
+        # Last-resort safety for unexpected conditions
+        cprint(f"Unexpected error: {e}", "red")
+        return True
 
 
 # ----------------------------------------------------------
-# REPL Loop
+# Main REPL Loop
 # ----------------------------------------------------------
-def calculator_repl(input_func=input):
-    """Main REPL loop for interactive calculator usage."""
-    try:
-        Calculator = safe_import_calculator()
-        calc = Calculator()
-        info("Calculator started. Type 'help' for commands.")
+def calculator_repl(input_func=input) -> None:
+    """Main Read–Eval–Print loop for interactive calculator."""
+    calculator = Calculator()
 
-        while True:
-            try:
-                cmd = input_func(Fore.YELLOW + "\nEnter command: " + Style.RESET_ALL).strip().lower()
-                if not _perform_command(calc, cmd, input_func):
-                    break
-            except KeyboardInterrupt:
-                warn("\nOperation cancelled (Ctrl+C). Exiting REPL safely.")
-                break
-            except EOFError:
-                warn("\nInput terminated (Ctrl+D). Exiting...")
-                break
-            except Exception as e:
-                error(f"Unexpected error in REPL: {e}")
+    cprint("Welcome to the Enhanced Calculator!", "cyan")
+    print("Type 'help' to see available commands.\n")
+
+    while True:
+        try:
+            command = input_func("Enter command: ").strip()
+            if not command:
                 continue
+            proceed = _perform_command(calculator, command)
+            if not proceed:
+                break
+        except KeyboardInterrupt:
+            cprint("\nKeyboard interrupt. Exiting.", "yellow")
+            break
+        except EOFError:
+            cprint("\nInput closed. Exiting.", "yellow")
+            break
+        except Exception as e:
+            # Fallback for fatal/unexpected REPL errors
+            cprint(f"\nFatal REPL error: {e}", "red")
+            break
 
-    except Exception as e:
-        # Handle fatal initialization errors
-        error(f"Fatal error: {e}")
-        return
 
-
-if __name__ == "__main__":
-    try:
-        calculator_repl()
-    except Exception:
-        sys.exit(1)

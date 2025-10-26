@@ -2,6 +2,7 @@
 # Author: Nandan Kumar
 # Date: 10/18/2025
 # Midterm Project: Enhanced Calculator Command-Line Application
+# File: tests/test_exceptions.py
 # ----------------------------------------------------------
 # Description:
 # Unit tests verifying the behavior of custom calculator exceptions.
@@ -13,7 +14,8 @@ from app.exceptions import (
     CalculatorError,
     ValidationError,
     OperationError,
-    ConfigurationError,
+    ConfigError,
+    HistoryError,
 )
 
 # ----------------------------------------------------------
@@ -26,6 +28,12 @@ def test_calculator_error_is_base_exception():
         raise CalculatorError("Base calculator error occurred")
     assert str(exc_info.value) == "Base calculator error occurred"
 
+
+def test_all_exceptions_inherit_from_calculator_error():
+    """Ensure all defined exceptions inherit from CalculatorError."""
+    for exc in [ValidationError, OperationError, ConfigError, HistoryError]:
+        assert issubclass(exc, CalculatorError)
+
 # ----------------------------------------------------------
 # ValidationError Tests
 # ----------------------------------------------------------
@@ -37,11 +45,11 @@ def test_validation_error_is_calculator_error():
     assert isinstance(exc_info.value, CalculatorError)
     assert str(exc_info.value) == "Validation failed"
 
-def test_validation_error_specific_exception():
-    """Ensure ValidationError behaves as expected."""
-    with pytest.raises(ValidationError) as exc_info:
-        raise ValidationError("Validation error")
-    assert str(exc_info.value) == "Validation error"
+
+def test_validation_error_default_message():
+    """Check the default message for ValidationError."""
+    err = ValidationError()
+    assert "Invalid input" in str(err)
 
 # ----------------------------------------------------------
 # OperationError Tests
@@ -54,25 +62,42 @@ def test_operation_error_is_calculator_error():
     assert isinstance(exc_info.value, CalculatorError)
     assert str(exc_info.value) == "Operation failed"
 
-def test_operation_error_specific_exception():
-    """Ensure OperationError behaves as expected."""
-    with pytest.raises(OperationError) as exc_info:
-        raise OperationError("Specific operation error")
-    assert str(exc_info.value) == "Specific operation error"
+
+def test_operation_error_default_message():
+    """Check the default message for OperationError."""
+    err = OperationError()
+    assert "Operation failed" in str(err)
 
 # ----------------------------------------------------------
-# ConfigurationError Tests
+# ConfigError Tests
 # ----------------------------------------------------------
 
-def test_configuration_error_is_calculator_error():
-    """ConfigurationError should inherit from CalculatorError."""
+def test_config_error_is_calculator_error():
+    """ConfigError should inherit from CalculatorError."""
     with pytest.raises(CalculatorError) as exc_info:
-        raise ConfigurationError("Configuration invalid")
+        raise ConfigError("Configuration invalid")
     assert isinstance(exc_info.value, CalculatorError)
     assert str(exc_info.value) == "Configuration invalid"
 
-def test_configuration_error_specific_exception():
-    """Ensure ConfigurationError behaves as expected."""
-    with pytest.raises(ConfigurationError) as exc_info:
-        raise ConfigurationError("Specific configuration error")
-    assert str(exc_info.value) == "Specific configuration error"
+
+def test_config_error_default_message():
+    """Check the default message for ConfigError."""
+    err = ConfigError()
+    assert "Configuration" in str(err)
+
+# ----------------------------------------------------------
+# HistoryError Tests
+# ----------------------------------------------------------
+
+def test_history_error_is_calculator_error():
+    """HistoryError should inherit from CalculatorError."""
+    with pytest.raises(CalculatorError) as exc_info:
+        raise HistoryError("History operation failed")
+    assert isinstance(exc_info.value, CalculatorError)
+    assert str(exc_info.value) == "History operation failed"
+
+
+def test_history_error_default_message():
+    """Check the default message for HistoryError."""
+    err = HistoryError()
+    assert "History" in str(err)

@@ -12,36 +12,41 @@
         "--cov-report=term-missing"
     ],
     "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.testing.cwd": "${workspaceFolder}",
     // ============================================================
     //  PYTHON INTERPRETER SETTINGS
     // ============================================================
-    // Use the local virtual environment inside this workspace
     "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
-    // Ensure VS Code uses this same environment in the terminal
     "terminal.integrated.env.linux": {
         "VIRTUAL_ENV": "${workspaceFolder}/venv",
         "PATH": "${workspaceFolder}/venv/bin:${env:PATH}",
         "PYTHONPATH": "${workspaceFolder}"
     },
-    // Automatically activate the environment in new terminals
     "python.terminal.activateEnvironment": true,
     // ============================================================
-    //  ENVIRONMENT VARIABLES (.env file)
+    //  ENVIRONMENT VARIABLES (.env FILE)
     // ============================================================
     "python.envFile": "${workspaceFolder}/.env",
+    "python.terminal.useEnvFile": true,
     // ============================================================
-    //  INTELLISENSE & CODE ANALYSIS
+    //  INTELLISENSE AND CODE ANALYSIS
     // ============================================================
     "python.analysis.autoImportCompletions": true,
     "python.analysis.extraPaths": [
+        "${workspaceFolder}",
         "${workspaceFolder}/app",
         "${workspaceFolder}/tests"
     ],
     "python.analysis.diagnosticMode": "workspace",
     "python.analysis.autoSearchPaths": true,
     "python.analysis.useLibraryCodeForTypes": true,
+    // 🔧 Suppress false missing import warnings for local packages
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none",
+        "reportMissingModuleSource": "none"
+    },
     // ============================================================
-    //  LINTING & FORMATTING
+    //  LINTING AND FORMATTING
     // ============================================================
     "editor.formatOnSave": true,
     "python.formatting.provider": "black",
@@ -49,27 +54,29 @@
     "python.linting.pylintEnabled": true,
     "python.linting.flake8Enabled": false,
     "python.linting.mypyEnabled": false,
-    // Speed up linting in WSL
     "python.linting.lintOnSave": true,
     // ============================================================
-    //  LOGGING & DEBUGGING
+    //  LOGGING AND DEBUGGING
     // ============================================================
     "python.logging.level": "INFO",
-    "python.trace.server": "off", // reduce noise in logs
-    "python.testing.cwd": "${workspaceFolder}",
+    "python.trace.server": "off",
     // ============================================================
-    //  MISCELLANEOUS
+    //  FILE CLEANUP AND EXCLUSIONS
     // ============================================================
     "files.exclude": {
         "**/__pycache__": true,
         "**/*.pyc": true,
         "**/.pytest_cache": true,
-        "**/.mypy_cache": true
+        "**/.mypy_cache": true,
+        "**/.coverage": true,
+        "htmlcov": true
     },
-    // Optional: organize imports automatically on save
     "editor.codeActionsOnSave": {
-        "source.organizeImports": true
+        "source.organizeImports": "explicit"
     },
+    // ============================================================
+    //  ENVIRONMENT MANAGER SETTINGS
+    // ============================================================
     "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.pythonProjects": []
 }

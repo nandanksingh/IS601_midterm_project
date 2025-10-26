@@ -1,259 +1,238 @@
 # ----------------------------------------------------------
 # Author: Nandan Kumar
-# Date: 10/16/2025
+# Date: 10/20/2025
 # Midterm Project: Enhanced Calculator Command-Line Application
+# File: app/calculator.py
 # ----------------------------------------------------------
 # Description:
-# Core calculator class that coordinates all major functionalities:
-# - Uses Factory Pattern to dynamically create operation instances
-# - Employs Strategy Pattern for executing arithmetic logic
-# - Utilizes Observer Pattern for logging and auto-save
-# - Implements Memento Pattern for undo/redo history management
+# The Calculator class serves as the core controller that integrates:
+#   • Factory Pattern → Operation creation via OperationFactory
+#   • Memento Pattern → Undo/Redo support for history state
+#   • Observer Pattern → Logging and AutoSave behaviors
+#   • Persistent History Management → CSV-based data storage
+#
+# Responsibilities:
+#   Evaluate and execute user operations
+#   Manage History, Mementos, and Observers
+#   Implement undo/redo logic
+#   Integrate Calculation + OperationFactory
+#   Trigger auto-save and logging through observers
+#   Provide REPL-compatible operation interface (set_operation, perform_operation)
 # ----------------------------------------------------------
 
 import logging
-import os
 from decimal import Decimal
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional
 import pandas as pd
 
 from app.calculation import Calculation
 from app.calculator_config import CalculatorConfig
 from app.calculator_memento import CalculatorMemento
-from app.exceptions import OperationError, ValidationError
-from app.history import HistoryObserver
-from app.input_validators import InputValidator
-from app.operations import OperationFactory, Operation
-
-Number = Union[int, float, Decimal]
+from app.history import LoggingObserver, AutoSaveObserver
+from app.exceptions import OperationError, HistoryError
+from app.calculation import CalculationFactory
 
 
+# ----------------------------------------------------------
+# Calculator Controller
+# ----------------------------------------------------------
 class Calculator:
-    """Main Calculator class implementing multiple design patterns."""
+    """Main calculator controller implementing Factory, Memento, and Observer patterns."""
 
     def __init__(self, config: Optional[CalculatorConfig] = None):
-        # Load configuration
-        if config is None:
-            project_root = Path(__file__).parent.parent
-            config = CalculatorConfig(base_dir=project_root)
-
-        self.config = config
+        # Initialize configuration and ensure directories exist
+        self.config = config or CalculatorConfig()
         self.config.validate()
 
-        # Setup environment
-        os.makedirs(self.config.log_dir, exist_ok=True)
-        self._setup_logging()
-        self._setup_directories()
+        Path(self.config.log_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.config.history_dir).mkdir(parents=True, exist_ok=True)
 
-        # Initialize state variables
+        self._setup_logging()
+
+        # Core components
         self.history: List[Calculation] = []
-        self.operation_strategy: Optional[Operation] = None
-        self.observers: List[HistoryObserver] = []
         self.undo_stack: List[CalculatorMemento] = []
         self.redo_stack: List[CalculatorMemento] = []
+        self.observers = [
+            LoggingObserver(),
+            AutoSaveObserver(self),
+        ]
 
-        # Attempt to load saved history
+        # REPL-compatible attribute
+        self.current_operation: Optional[str] = None
+
+        # Attempt to load history
         try:
             self.load_history()
         except Exception as e:
-            logging.warning(f"Could not load existing history: {e}")
+            logging.warning(f"History load skipped: {e}")
 
-        logging.info("Calculator initialized successfully")
+        logging.info("Calculator initialized successfully.")
 
     # ------------------------------------------------------
-    # Logging & Directory Setup
+    # Setup & Initialization
     # ------------------------------------------------------
     def _setup_logging(self) -> None:
-        """Configure logging file and format."""
+        """Initialize logging configuration."""
         try:
-            os.makedirs(self.config.log_dir, exist_ok=True)
-            log_file = self.config.log_file.resolve()
             logging.basicConfig(
-                filename=str(log_file),
+                filename=str(self.config.log_file),
                 level=logging.INFO,
                 format="%(asctime)s - %(levelname)s - %(message)s",
                 force=True,
             )
-            logging.info(f"Logging initialized at: {log_file}")
+            logging.info("Logging setup complete.")
         except Exception as e:
-            print(f"Error setting up logging: {e}")
-            raise
+            raise HistoryError(f"Logging setup failed: {e}")
 
-    def _setup_directories(self) -> None:
-        """Ensure required directories exist."""
-        self.config.history_dir.mkdir(parents=True, exist_ok=True)
+    # ------------------------------------------------------
+    # REPL Compatibility
+    # ------------------------------------------------------
+    def set_operation(self, operation_name: str) -> None:
+        """Store the current operation name for REPL usage."""
+        self.current_operation = operation_name.lower()
+    
+    def perform_operation(self, a, b) -> Decimal:
+        """Perform arithmetic using the currently selected operation (REPL-safe)."""
+        if not self.current_operation:
+            raise OperationError("No operation selected.")
+
+        try:
+            # Convert REPL input (strings) into Decimals safely
+            a_dec = Decimal(str(a))
+            b_dec = Decimal(str(b))
+            result = self.calculate(self.current_operation, a_dec, b_dec).result
+            return result
+
+        except Exception as e:
+            # Wrap any numeric or factory-level errors in a uniform message
+            raise OperationError(f"Operation failed: {e}")
+
+
+    # ------------------------------------------------------
+    # Factory Pattern – Arithmetic Execution
+    # ------------------------------------------------------
+    def calculate(self, operation: str, a: Decimal, b: Decimal) -> Calculation:
+        """Perform an arithmetic operation using the registered factory."""
+        try:
+            func = CalculationFactory.operations.get(operation.lower())
+            if not func:
+                raise OperationError(f"Unknown operation: {operation}")
+
+            result = func(a, b)
+            calc = Calculation(operation, a, b)
+            self.history.append(calc)
+
+            # Maintain bounded history
+            if len(self.history) > self.config.max_history_size:
+                self.history.pop(0)
+
+            self._save_memento()
+            self._notify_observers(calc)
+
+            logging.info(f"Operation performed successfully: {calc}")
+            return calc
+
+        except OperationError:
+            raise
+        except Exception as e:
+            raise OperationError(f"Operation failed: {e}")
+
+    # ------------------------------------------------------
+    # History Management (Persistence)
+    # ------------------------------------------------------
+    def save_history(self) -> None:
+        """Save all calculations to a CSV file."""
+        try:
+            data = [calc.to_dict() for calc in self.history]
+            df = pd.DataFrame(data)
+            df.to_csv(self.config.history_file, index=False)
+            logging.info(f"History saved → {self.config.history_file}")
+        except Exception as e:
+            raise HistoryError(f"Failed to save history: {e}")
+
+    def load_history(self) -> None:
+        """Load previous calculations from the CSV file (if exists)."""
+        try:
+            file_path = Path(self.config.history_file)
+            if not file_path.exists():
+                logging.info("No previous history file found.")
+                return
+
+            df = pd.read_csv(file_path)
+            if not df.empty:
+                self.history = [
+                    Calculation.from_dict(row.to_dict())
+                    for _, row in df.iterrows()
+                ]
+                logging.info(f"Loaded {len(self.history)} records from history.")
+        except Exception as e:
+            raise HistoryError(f"Failed to load history: {e}")
+
+    def clear_history(self) -> None:
+        """Erase all stored history and mementos."""
+        self.history.clear()
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        logging.info("🧹 History cleared.")
+
+    def list_history(self) -> List[str]:
+        """Return formatted strings of all stored calculations."""
+        return [str(calc) for calc in self.history]
+
+    # ------------------------------------------------------
+    # Memento Pattern – Undo/Redo Logic
+    # ------------------------------------------------------
+    def _save_memento(self) -> None:
+        """Save current state for undo/redo functionality."""
+        snapshot = CalculatorMemento(self.history.copy())
+        self.undo_stack.append(snapshot)
+        self.redo_stack.clear()
+        logging.debug("Memento snapshot saved.")
+
+    def undo(self) -> None:
+        """Revert to previous state."""
+        if not self.undo_stack:
+            raise HistoryError("Nothing to undo.")
+        self.redo_stack.append(CalculatorMemento(self.history.copy()))
+        snapshot = self.undo_stack.pop()
+        self.history = snapshot.get_state()
+        logging.info("Undo performed.")
+
+    def redo(self) -> None:
+        """Reapply a previously undone state."""
+        if not self.redo_stack:
+            raise HistoryError("Nothing to redo.")
+        self.undo_stack.append(CalculatorMemento(self.history.copy()))
+        snapshot = self.redo_stack.pop()
+        self.history = snapshot.get_state()
+        logging.info("Redo performed.")
 
     # ------------------------------------------------------
     # Observer Pattern
     # ------------------------------------------------------
-    def add_observer(self, observer: HistoryObserver) -> None:
-        """Register an observer (e.g., LoggingObserver, AutoSaveObserver)."""
-        self.observers.append(observer)
-        logging.info(f"Added observer: {observer.__class__.__name__}")
-
-    def remove_observer(self, observer: HistoryObserver) -> None:
-        """Unregister an observer."""
-        self.observers.remove(observer)
-        logging.info(f"Removed observer: {observer.__class__.__name__}")
-
-    def notify_observers(self, calculation: Calculation) -> None:
-        """Notify all observers of a new calculation event."""
+    def _notify_observers(self, calculation: Calculation) -> None:
+        """Notify all observers when a new calculation is completed."""
         for observer in self.observers:
             try:
                 observer.update(calculation)
             except Exception as e:
                 logging.warning(f"Observer {observer} failed: {e}")
 
-    # ------------------------------------------------------
-    # Factory + Strategy Pattern
-    # ------------------------------------------------------
-    def set_operation(self, operation_name: str) -> None:
-        """
-        Select and create an operation strategy dynamically.
-        Example: set_operation("power") or set_operation("divide")
-        """
-        try:
-            self.operation_strategy = OperationFactory.create_operation(operation_name)
-            logging.info(f"Set operation: {operation_name}")
-        except ValueError as e:
-            logging.error(f"Invalid operation: {e}")
-            raise OperationError(str(e))
+    def add_observer(self, observer) -> None:
+        """Register a new observer."""
+        self.observers.append(observer)
+        logging.info(f"Observer added: {observer.__class__.__name__}")
+
+    def remove_observer(self, observer) -> None:
+        """Unregister an observer."""
+        self.observers.remove(observer)
+        logging.info(f"Observer removed: {observer.__class__.__name__}")
 
     # ------------------------------------------------------
-    # Core Operation Execution
+    # Representation
     # ------------------------------------------------------
-    def perform_operation(self, a: Union[str, Number], b: Union[str, Number]) -> Decimal:
-        """
-        Validate inputs, perform selected operation, update history, and notify observers.
-        """
-        if not self.operation_strategy:
-            raise OperationError("No operation set. Please select an operation first.")
-
-        try:
-            # Step 1: Validate numeric inputs
-            validated_a = InputValidator.validate_number(a, self.config)
-            validated_b = InputValidator.validate_number(b, self.config)
-
-            # Step 2: Execute the operation
-            result = self.operation_strategy.execute(validated_a, validated_b)
-
-            # Step 3: Record the calculation
-            calculation = Calculation(
-                operation=str(self.operation_strategy),
-                operand1=validated_a,
-                operand2=validated_b,
-            )
-
-            # Step 4: Save current state for undo/redo
-            self.undo_stack.append(CalculatorMemento(self.history.copy()))
-            self.redo_stack.clear()
-
-            # Step 5: Update history
-            self.history.append(calculation)
-            if len(self.history) > self.config.max_history_size:
-                self.history.pop(0)
-
-            # Step 6: Notify observers
-            self.notify_observers(calculation)
-
-            logging.info(f"Performed operation: {calculation}")
-            return result
-
-        except ValidationError as e:
-            logging.error(f"Validation error: {str(e)}")
-            raise
-        except Exception as e:
-            logging.error(f"Operation failed: {str(e)}")
-            raise OperationError(f"Operation failed: {str(e)}")
-
-    # ------------------------------------------------------
-    # History Management (pandas-based)
-    # ------------------------------------------------------
-    def save_history(self) -> None:
-        """Persist calculation history to a CSV file."""
-        try:
-            self.config.history_dir.mkdir(parents=True, exist_ok=True)
-            history_data = [
-                {
-                    "operation": str(calc.operation),
-                    "operand1": str(calc.operand1),
-                    "operand2": str(calc.operand2),
-                    "result": str(calc.result),
-                    "timestamp": calc.timestamp.isoformat(),
-                }
-                for calc in self.history
-            ]
-            df = pd.DataFrame(
-                history_data or [],
-                columns=["operation", "operand1", "operand2", "result", "timestamp"],
-            )
-            df.to_csv(self.config.history_file, index=False)
-            logging.info(f"History saved to {self.config.history_file}")
-        except Exception as e:
-            logging.error(f"Failed to save history: {e}")
-            raise OperationError(f"Failed to save history: {e}")
-
-    def load_history(self) -> None:
-        """Load existing calculation history from CSV (if present)."""
-        try:
-            if self.config.history_file.exists():
-                df = pd.read_csv(self.config.history_file)
-                if not df.empty:
-                    self.history = [
-                        Calculation.from_dict(row.to_dict())
-                        for _, row in df.iterrows()
-                    ]
-                    logging.info(f"Loaded {len(self.history)} past calculations.")
-        except Exception as e:
-            logging.error(f"Failed to load history: {e}")
-            raise OperationError(f"Failed to load history: {e}")
-
-    def get_history_dataframe(self) -> pd.DataFrame:
-        """Return the full calculation history as a DataFrame."""
-        data = [
-            {
-                "operation": str(calc.operation),
-                "operand1": str(calc.operand1),
-                "operand2": str(calc.operand2),
-                "result": str(calc.result),
-                "timestamp": calc.timestamp,
-            }
-            for calc in self.history
-        ]
-        return pd.DataFrame(data)
-
-    def show_history(self):
-        """Return a formatted list of past calculations."""
-        return [
-            f"{calc.operation}({calc.operand1}, {calc.operand2}) = {calc.result}"
-            for calc in self.history
-        ]
-
-    def clear_history(self):
-        """Clear current history and undo/redo stacks."""
-        self.history.clear()
-        self.undo_stack.clear()
-        self.redo_stack.clear()
-        logging.info("History cleared successfully.")
-
-    # ------------------------------------------------------
-    # Undo / Redo (Memento Pattern)
-    # ------------------------------------------------------
-    def undo(self) -> bool:
-        """Revert to the previous calculator state."""
-        if not self.undo_stack:
-            return False
-        self.redo_stack.append(CalculatorMemento(self.history.copy()))
-        self.history = self.undo_stack.pop().get_state()
-        logging.info("Undo performed.")
-        return True
-
-    def redo(self) -> bool:
-        """Reapply the previously undone state."""
-        if not self.redo_stack:
-            return False
-        self.undo_stack.append(CalculatorMemento(self.history.copy()))
-        self.history = self.redo_stack.pop().get_state()
-        logging.info("Redo performed.")
-        return True
+    def __repr__(self) -> str:
+        """Readable object representation."""
+        return f"<Calculator with {len(self.history)} records>"

@@ -2,6 +2,7 @@
 # Author: Nandan Kumar
 # Date: 10/18/2025
 # Midterm Project: Enhanced Calculator Command-Line Application
+# File: tests/test_logger.py
 # ----------------------------------------------------------
 # Description:
 # Unit tests for logger.py (Logger and LoggingObserver classes)
